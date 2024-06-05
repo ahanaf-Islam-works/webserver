@@ -32,8 +32,6 @@ public class ConfigurationManager {
             }
             JsonNode conf = Json.parse(sb.toString());
             newConfiguration = Json.fromJson(conf, Configuration.class);
-        } catch (FileNotFoundException e) {
-            throw new HttpConfigException(e);
         } catch (IOException e) {
             throw new HttpConfigException(e);
         }
