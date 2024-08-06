@@ -1,60 +1,52 @@
 package org.server.core;
-
 import org.server.config.HttpConfigurationException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketException;
 
 // ServerListenerThread class to handle incoming connections on a specified port
 public class ServerListenerThread extends Thread {
-    private final int port;
-    private final String webroot;
-    private ServerSocket serverSocket;
+    private final ServerSocket serverSocket;
 
-    // Constructor to initialize the server with a port and webroot (currently not used)
+    // Constructor to initialize the server with a port
     public ServerListenerThread(int port, String webroot) throws IOException {
-        this.port = port;
-        this.webroot = webroot;
-        this.serverSocket = new ServerSocket(this.port);
+        try {
+            serverSocket = new ServerSocket(port);
+        } catch (SocketException e) {
+            throw new HttpConfigurationException("Failed to create server socket", e);
+        }
     }
 
-    @Override
     public void run() {
-        // Start the server and listen for connections
-        try (ServerSocket serverSocket = new ServerSocket(port)) {
-            while (true) {
-                // Accept a connection from a client
-                Socket socket = serverSocket.accept();
+        try {
+            while (serverSocket.isBound() && !serverSocket.isClosed()) {
+                try (Socket socket = serverSocket.accept();
+                     InputStream inputStream = socket.getInputStream();
+                     OutputStream outputStream = socket.getOutputStream()) {
 
-                // Get input and output streams from the socket
-                InputStream inputStream = socket.getInputStream();
-                OutputStream outputStream = socket.getOutputStream();
+                    String html = "<html><head><title>Document</title></head><body><h1>Hello</h1></body></html>";
+                    final String CRLF = "\r\n";
+                    String response = "HTTP/1.1 200 OK" + CRLF +
+                            "Content-Length: " + html.length() + CRLF +
+                            CRLF +
+                            html;
 
-                // Create a simple HTML response
-                String html = "<html>" +
-                        "<head><title>Document</title></head>" +
-                        "<body><h1>My First Heading</h1></body>" +
-                        "</html>";
-                final String CRLF = "\r\n"; // Carriage Return Line Feed for HTTP protocol
-                String response = "HTTP/1.1 200 OK" + CRLF + // Status Line: HTTP Version and Status Code
-                        "Content-Type: text/html; charset=UTF-8" + CRLF + // Content-Type header
-                        "Content-Length: " + html.length() + CRLF + // Content-Length header
-                        CRLF + // Blank line indicating the end of headers
-                        html; // Response body
-
-                // Send the response to the client
-                outputStream.write(response.getBytes());
-
-                // Close the streams and socket
-                inputStream.close();
-                outputStream.close();
-                socket.close();
+                    outputStream.write(response.getBytes());
+                } catch (IOException e) {
+                    System.err.println("Failed to process request: " + e.getMessage());
+                }
             }
-        } catch (IOException e) {
-            // Handle server errors and throw a custom exception
-            throw new HttpConfigurationException("Server error: " + e.getMessage(), e);
+        } finally {
+            if (serverSocket != null && !serverSocket.isClosed()) {
+                try {
+                    serverSocket.close();
+                } catch (IOException e) {
+                    System.err.println("Failed to close server socket: " + e.getMessage());
+                }
+            }
         }
     }
 }
